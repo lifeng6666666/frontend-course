@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build static site
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          # 用户主页仓库（username.github.io）部署在根路径；项目页自动加子路径前缀
+          if [ "$REPO" = "${REPO%.github.io}" ]; then
+            export NEXT_PUBLIC_BASE_PATH="/$REPO"
+          else
+            export NEXT_PUBLIC_BASE_PATH=""
+          fi
+          export STATIC_EXPORT=1
+          npm run build
+
+      - name: Ensure .nojekyll
+        run: touch out/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
